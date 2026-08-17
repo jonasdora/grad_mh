@@ -6,6 +6,9 @@
 *.Rda
 *.rdata
 *.RData
+*.rds
+*.rdb
+*.rdx
 *.sav
 *.pdf
 *.PDF

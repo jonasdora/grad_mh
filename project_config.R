@@ -1,8 +1,3 @@
-# Install additional dependencies that do not have conda builds 
-# for MacOS M1 chipset. Note that this workflow may not work for 
-# all machines. In fact, using conda to try to automate enviornment
-# creation with this approach was not straightfoward and required
-# additional steps to modify compilers under the hood. 
 
 pkgs <- c('rstan', 'shinystan', 'brms', 'ggraph', 'GGally', 'tufte', 'nFactors', 'tidygraph', 'lavaan', 
           'Cairo')
@@ -16,8 +11,7 @@ for(pkg in pkgs){
     }
 }
 
-# To leverage parallelization during fitting - allows additional orchestration
-# of computations to boost speed. 
+
 if(!require(cmdstanr)){
     install.packages("cmdstanr", repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
     # Installation step will set the path for the cmdstan backend.
@@ -28,7 +22,7 @@ if(!require(cmdstanr)){
 library(glue)
 library(magrittr)
 
-LOCAL_REPO <- '~/Desktop/grad_mh'
+LOCAL_REPO <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh'
 DATA_DIR <- paste0(LOCAL_REPO, '/', 'data')
 R_DIR <- paste0(LOCAL_REPO, '/', 'R')
 MAPS_DIR <- paste0(LOCAL_REPO, '/', 'data_maps')
@@ -80,7 +74,7 @@ POIS_PRIOR_CONFIG <- c(
 
 pad_numbers <- function(x, width, justify = "right") {
     x <- format(x, width = width, justify = justify)
-    gsub(" ", "\u2007", x)
+    gsub(" ", "\u2007", x)  # figure space (U+2007); was the literal string /u2007
 }
 
 DEFAULT_BREAKS <- seq(0, 40, by=10)

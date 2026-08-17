@@ -1,5 +1,5 @@
 # Base modeling script - starting off with simple analysis
-BASE_FILE <- '~/Desktop/grad_mh/project_config.R'
+BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/shackman/grad_mh/project_config.R'
 
 # If missing the config file raise early.
 # Likely just opened the repo in a different file system
@@ -74,10 +74,10 @@ res <- logistic_model_wrapper(
     lv1_ran_vars = 'time', 
     lv2_int_vars = lv2_int_vars, 
     output_folder = POSTERIOR_OUTPUTS, 
-    warmup = 5000, 
-    iter = 7500, 
+    warmup = 1000, 
+    iter = 2500, 
     chains = 3, 
     control_list = list(adapt_delta = .95), 
-    model_save_name = "toy_example",
-    chain_hyperthreading = TRUE
+    model_save_name = "toy_example2",
+    chain_hyperthreading = F
 )

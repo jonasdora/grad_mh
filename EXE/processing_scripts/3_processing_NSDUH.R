@@ -1,5 +1,5 @@
 # File used to produce model-script ready NSDUH data
-BASE_FILE <- '~/Desktop/grad_mh/project_config.R'
+BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/shackman/grad_mh/project_config.R'
 DATA_VERSION <- '2023-01-15'
 
 # If missing the config file raise early.
@@ -12,7 +12,7 @@ source(BASE_FILE)
 sapply(list.files(R_DIR, full.names = TRUE), source)
 
 # Load the NSDUH data:
-load_RData_files('~/Desktop/grad_mh/data/NSDUH/raw_data')
+load_RData_files('C:/Users/Jonas Dora/OneDrive - UW/studies/shackman/grad_mh/data/NSDUH/raw_data')
 
 # Process and concatenate original and study_dfs
 NSDUH_2008_df_list <- create_study_datasets(PUF2008_090718, '{MAPS_DIR}/NSDUH_map_2008.yaml' %>% glue())

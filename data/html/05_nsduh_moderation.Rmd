@@ -1,0 +1,52 @@
+---
+title: "Graduate School MH — NSDUH Moderation Models"
+author: "Jonas Dora"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: hide
+    theme: flatly
+    highlight: tango
+    df_print: paged
+---
+
+# Overview
+
+NSDUH moderation models: Race, Sex (16).
+
+This is one of five split reports for De Young et al., "Graduate school confers
+risk for mental illness and suicide." The report bodies share a common renderer
+(`_report_body.Rmd`); only the set of models differs between files.
+
+```{r define-models, include=FALSE}
+POSTERIOR_OUTPUTS <- "C:/Users/jonas/OneDrive - UW/studies/2026_shackman/grad_mh/data/OUTPUTS"
+rds_model <- function(label, filename) list(name = label, path = file.path(POSTERIOR_OUTPUTS, paste0(filename, ".rds")), format = "rds")
+rdata_model <- function(label, filename) list(name = label, path = file.path(POSTERIOR_OUTPUTS, paste0(filename, ".RData")), format = "RData")
+
+models_to_report <- list(
+  rdata_model("NSDUH: Any MI (Mod: Race)", "nsduh_anymi_12mos_mod_race"),
+  rdata_model("NSDUH: Global Health Dich (Mod: Race)", "nsduh_global_health_dich_mod_race"),
+  rdata_model("NSDUH: Suicidal Thinking (Mod: Race)", "nsduh_suic_thnk_12mos_mod_race"),
+  rdata_model("NSDUH: Suicide Attempt Linear (Mod: Race)", "nsduh_suic_try_12mos_linear_mod_race"),
+  rdata_model("NSDUH Matched: Any MI (Mod: Race)", "nsduh_matched_anymi_12mos_mod_race"),
+  rdata_model("NSDUH Matched: Global Health Dich (Mod: Race)", "nsduh_matched_global_health_dich_mod_race"),
+  rdata_model("NSDUH Matched: Suicidal Thinking (Mod: Race)", "nsduh_matched_suic_thnk_12mos_mod_race"),
+  rdata_model("NSDUH Matched: Suicide Attempt Linear (Mod: Race)", "nsduh_matched_suic_try_12mos_linear_mod_race"),
+
+
+  rdata_model("NSDUH: Any MI (Mod: Sex)", "nsduh_anymi_12mos_mod_sex"),
+  rdata_model("NSDUH: Global Health Dich (Mod: Sex)", "nsduh_global_health_dich_mod_sex"),
+  rdata_model("NSDUH: Suicidal Thinking (Mod: Sex)", "nsduh_suic_thnk_12mos_mod_sex"),
+  rdata_model("NSDUH: Suicide Attempt Linear (Mod: Sex)", "nsduh_suic_try_12mos_linear_mod_sex"),
+  rdata_model("NSDUH Matched: Any MI (Mod: Sex)", "nsduh_matched_anymi_12mos_mod_sex"),
+  rdata_model("NSDUH Matched: Global Health Dich (Mod: Sex)", "nsduh_matched_global_health_dich_mod_sex"),
+  rdata_model("NSDUH Matched: Suicidal Thinking (Mod: Sex)", "nsduh_matched_suic_thnk_12mos_mod_sex"),
+  rdata_model("NSDUH Matched: Suicide Attempt Linear (Mod: Sex)", "nsduh_matched_suic_try_12mos_linear_mod_sex")
+)
+```
+
+```{r child = "_report_body.Rmd"}
+```
