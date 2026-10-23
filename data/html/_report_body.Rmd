@@ -1,0 +1,780 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  dpi = 300,
+  cache = TRUE
+)
+
+# Load required libraries
+library(brms)
+library(bayesplot)
+library(posterior)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(patchwork)
+
+# Set bayesplot theme
+bayesplot::color_scheme_set("viridis")
+```
+
+
+```{r create-functions, include=FALSE}
+
+load_results_list <- function(path, format) {
+  if (format == "rds") {
+    return(readRDS(path))
+  } else if (format == "RData") {
+    env <- new.env(parent = emptyenv())
+    load(path, envir = env)
+    if (exists("results_list", envir = env)) {
+      return(env$results_list)
+    } else {
+      stop("No 'results_list' object found in RData file.")
+    }
+  } else {
+    stop(paste("Unknown file format:", format))
+  }
+}
+
+
+calc_posterior_prob_positive <- function(model, pars = NULL, flip = FALSE) {
+  
+  draws <- as_draws_df(model)
+  
+  if(is.null(pars)){
+    pars <- names(draws)
+    pars <- pars[grepl("^b_", pars)]
+    pars <- pars[!grepl("Intercept", pars)]
+    pars <- pars[!pars %in% c("lprior", "lp__")]
+  }
+  
+  results <- data.frame(
+    Parameter = character(),
+    Mean = character(),
+    Lower_CI = character(),
+    Upper_CI = character(),
+    P_Positive = character(),
+    stringsAsFactors = FALSE
+  )
+  
+  for(par in pars){
+    if(par %in% names(draws)){
+      par_draws <- draws[[par]]
+      
+      # Flip the outcome direction if requested (equivalent to refitting with 1 - Y)
+      if (flip) {
+        par_draws <- -par_draws
+      }
+      
+      par_mean <- mean(par_draws)
+      par_ci <- quantile(par_draws, probs = c(0.025, 0.975))
+      prob_positive <- mean(par_draws > 0)
+      
+      results <- rbind(results, data.frame(
+        Parameter  = par,
+        Mean       = sprintf("%.3f", par_mean),
+        Lower_CI   = sprintf("%.3f", par_ci[1]),
+        Upper_CI   = sprintf("%.3f", par_ci[2]),
+        P_Positive = sprintf("%.3f", prob_positive),
+        stringsAsFactors = FALSE
+      ))
+    }
+  }
+  
+  return(results)
+}
+
+
+needs_outcome_flip <- function(model_name) {
+  grepl("^NSDUH.*Global Health", model_name)
+}
+
+
+hdi_95 <- function(x, ci = 0.95) {
+  x <- sort(x)
+  n <- length(x)
+  window_size <- ceiling(ci * n)
+  widths <- x[(window_size + 1):n] - x[1:(n - window_size)]
+  best <- which.min(widths)
+  c(lower = x[best], upper = x[best + window_size])
+}
+
+summarize_posterior <- function(x) {
+  hdi_vals <- hdi_95(x)
+  c(est = mean(x), lo = unname(hdi_vals["lower"]), hi = unname(hdi_vals["upper"]))
+}
+
+
+get_wave_labels <- function(model_name) {
+  if (grepl("^NCHA", model_name)) {
+    return(c(first = "Fall 2008", last = "Spring 2019"))
+  } else {
+    return(c(first = "First Wave", last = "Last Wave"))
+  }
+}
+
+print_coding_info <- function(model_obj, flip = FALSE) {
+  data <- model_obj$data
+  formula_obj <- formula(model_obj)
+  
+  outcome_var <- all.vars(formula_obj$formula[[2]])
+  if (flip) {
+    cat(sprintf("**Outcome:** `%s` — in the underlying NSDUH data this variable is coded in the **opposite** direction from the ACHA/NCHA global-health outcome, so the raw model summary above predicts the unwanted category. **For consistency with the ACHA/NCHA convention (1 = the category of interest, 0 = the other), the derived tables below (Posterior Probability of Positive Direction and Derived Effect Summary) have been sign-flipped.** This is mathematically equivalent to refitting the model with `1 - %s` as the outcome.\n\n",
+                outcome_var, outcome_var))
+  } else {
+    cat(sprintf("**Outcome:** `%s` — coded **1 = yes / presence**, **0 = no / absence**\n\n",
+                outcome_var))
+  }
+  
+  all_pred_vars <- all.vars(formula_obj$formula[[3]])
+  exclude_vars <- c("school_id", "c_Time", "quad_c_Time", "c_year", "quad_c_year",
+                     "c_time", "quad_c_time")
+  pred_vars <- setdiff(all_pred_vars, exclude_vars)
+  
+  if (length(pred_vars) == 0) return(invisible(NULL))
+  
+  for (v in pred_vars) {
+    if (!v %in% names(data)) next
+    col <- data[[v]]
+    
+    if (is.factor(col)) {
+      levs <- levels(col)
+      fc   <- fit_contrasts(model_obj, v)
+      if (!is.null(fc) && identical(fc$scheme, "effect") && length(levs) == 2) {
+        cat(sprintf("**%s:** reference coded, reference = `%s`; other level `%s`. (Fit with effect coding; the Model Summary and probability tables below are converted to reference coding with no refit, so this model is on the same scale as the other moderation analyses.)\n\n",
+                    v, levs[1], levs[2]))
+      } else if (!is.null(fc) && identical(fc$scheme, "effect")) {
+        cat(sprintf("**%s:** reference coded, reference = `%s` (converted from an effect-coded fit, no refit); other levels: %s.\n\n",
+                    v, levs[1], paste(sprintf("`%s`", levs[-1]), collapse = ", ")))
+      } else {
+        cat(sprintf("**%s:** reference coded — reference = `%s`; other levels: %s\n\n",
+                    v, levs[1],
+                    paste(sprintf("`%s`", levs[-1]), collapse = ", ")))
+      }
+    } else if (is.character(col)) {
+      levs <- sort(unique(col))
+      cat(sprintf("**%s:** Levels (alphabetical, first = reference): %s\n\n",
+                  v, paste(sprintf("`%s`", levs), collapse = ", ")))
+    } else if (is.numeric(col)) {
+      uvals <- sort(unique(col))
+      if (length(uvals) <= 5 && all(uvals == round(uvals))) {
+        cat(sprintf("**%s:** Coded values = {%s}; reference (in interactions) = 0\n\n",
+                    v, paste(uvals, collapse = ", ")))
+      } else {
+        cat(sprintf("**%s:** Continuous (mean = %.2f, range = [%.2f, %.2f]); set to 0 for derived estimates\n\n",
+                    v, mean(col, na.rm = TRUE),
+                    min(col, na.rm = TRUE), max(col, na.rm = TRUE)))
+      }
+    }
+  }
+}
+
+
+fit_contrasts <- function(model_obj, v) {
+  lv <- levels(model_obj$data[[v]])
+  if (is.null(lv) || length(lv) < 2) return(NULL)
+  k  <- length(lv)
+  fe <- rownames(brms::fixef(model_obj))
+  treat_cols <- paste0(v, lv[-1])
+  sum_cols   <- paste0(v, seq_len(k - 1))
+  if (all(treat_cols %in% fe)) {
+    CM <- stats::contr.treatment(k); rownames(CM) <- lv; colnames(CM) <- lv[-1]
+    return(list(scheme = "reference", CM = CM))
+  }
+  if (all(sum_cols %in% fe)) {
+    CM <- stats::contr.sum(k); rownames(CM) <- lv; colnames(CM) <- as.character(seq_len(k - 1))
+    return(list(scheme = "effect", CM = CM))
+  }
+  NULL
+}
+
+
+refcoded_fixef_draws <- function(model_obj) {
+  fe      <- rownames(brms::fixef(model_obj))
+  int_fes <- fe[grepl(":", fe)]
+  if (length(int_fes) == 0) return(NULL)
+  d <- as_draws_df(model_obj)
+  data_factors <- names(model_obj$data)[vapply(model_obj$data, is.factor, logical(1))]
+  stubs <- unique(unlist(lapply(int_fes, function(f) {
+    p <- strsplit(f, ":")[[1]]; p[!p %in% c("c_Time", "quad_c_Time")]
+  })))
+  mod_var <- NULL
+  for (s in stubs) {
+    cand <- data_factors[vapply(data_factors, function(f) startsWith(s, f), logical(1))]
+    if (length(cand)) { mod_var <- cand[which.max(nchar(cand))]; break }
+  }
+  if (is.null(mod_var)) return(NULL)
+  fc <- fit_contrasts(model_obj, mod_var)
+  if (is.null(fc) || !identical(fc$scheme, "effect") || nrow(fc$CM) != 2) return(NULL)
+  lv <- rownames(fc$CM); L1 <- lv[1]; L2 <- lv[2]
+  gcol <- paste0("b_", mod_var, "1")
+  if (!gcol %in% names(d)) return(NULL)
+  getcol <- function(nm) if (nm %in% names(d)) d[[nm]] else rep(0, nrow(d))
+  G     <- d[[gcol]]
+  tG    <- getcol(paste0("b_c_Time:", mod_var, "1"))
+  if (all(tG == 0)) tG <- getcol(paste0("b_", mod_var, "1:c_Time"))
+  has_q <- "b_quad_c_Time" %in% names(d)
+  qG    <- getcol(paste0("b_quad_c_Time:", mod_var, "1"))
+  if (all(qG == 0)) qG <- getcol(paste0("b_", mod_var, "1:quad_c_Time"))
+  out <- list()
+  out[["Intercept"]]                       <- d[["b_Intercept"]] + G
+  out[["c_Time"]]                          <- d[["b_c_Time"]] + tG
+  if (has_q) out[["quad_c_Time"]]          <- d[["b_quad_c_Time"]] + qG
+  out[[paste0(mod_var, L2)]]               <- -2 * G
+  out[[paste0("c_Time:", mod_var, L2)]]    <- -2 * tG
+  if (has_q) out[[paste0("quad_c_Time:", mod_var, L2)]] <- -2 * qG
+  list(draws = out, mod_var = mod_var, ref_level = L1, other_level = L2)
+}
+
+# Fixed-effects table (Estimate / Est.Error / 95% CrI) from converted draws.
+refcoded_summary_table <- function(draws_list) {
+  do.call(rbind, lapply(names(draws_list), function(nm) {
+    x <- draws_list[[nm]]; ci <- quantile(x, c(.025, .975), names = FALSE)
+    data.frame(Parameter = nm,
+               Estimate   = sprintf("%.3f", mean(x)),
+               Est.Error  = sprintf("%.3f", sd(x)),
+               `l-95% CI` = sprintf("%.3f", ci[1]),
+               `u-95% CI` = sprintf("%.3f", ci[2]),
+               check.names = FALSE, stringsAsFactors = FALSE)
+  }))
+}
+
+# Posterior-direction table (Mean / 95% CI / P(+)) from converted draws, Intercept excluded.
+refcoded_prob_table <- function(draws_list, flip = FALSE) {
+  nm_all <- setdiff(names(draws_list), "Intercept")
+  do.call(rbind, lapply(nm_all, function(nm) {
+    x <- draws_list[[nm]]; if (flip) x <- -x
+    ci <- quantile(x, c(.025, .975), names = FALSE)
+    data.frame(Parameter = nm,
+               Mean       = sprintf("%.3f", mean(x)),
+               Lower_CI   = sprintf("%.3f", ci[1]),
+               Upper_CI   = sprintf("%.3f", ci[2]),
+               P_Positive = sprintf("%.3f", mean(x > 0)),
+               stringsAsFactors = FALSE)
+  }))
+}
+
+
+calc_effect_summary <- function(model_obj, model_name, flip = FALSE) {
+  
+  draws_df <- as_draws_df(model_obj)
+  data     <- model_obj$data
+  n_draws  <- nrow(draws_df)
+  
+  time_var <- NULL
+  for (v in c("c_Time", "c_year", "c_time", "c_Year")) {
+    if (paste0("b_", v) %in% names(draws_df)) {
+      time_var <- v; break
+    }
+  }
+  if (is.null(time_var)) {
+    message("  [calc_effect_summary] Could not detect time variable for: ", model_name)
+    return(NULL)
+  }
+  
+  quad_var <- NULL
+  for (v in c("quad_c_Time", "quad_c_year", "quad_c_time", "quad_c_Year")) {
+    if (paste0("b_", v) %in% names(draws_df)) {
+      quad_var <- v; break
+    }
+  }
+  
+  t_first <- min(data[[time_var]], na.rm = TRUE)
+  t_last  <- max(data[[time_var]], na.rm = TRUE)
+  
+
+  if (!is.null(quad_var) && quad_var %in% names(data)) {
+    q_first <- data[[quad_var]][ which.min(abs(data[[time_var]] - t_first)) ]
+    q_last  <- data[[quad_var]][ which.min(abs(data[[time_var]] - t_last))  ]
+  } else {
+    q_first <- 0
+    q_last  <- 0
+  }
+  
+  b_int  <- draws_df[["b_Intercept"]]
+  b_time <- draws_df[[paste0("b_", time_var)]]
+  b_quad <- if (!is.null(quad_var)) draws_df[[paste0("b_", quad_var)]] else rep(0, n_draws)
+  
+  # Helper: safely fetch a draw column (returns 0 if missing)
+  safe_draws <- function(name) {
+    if (name %in% names(draws_df)) return(draws_df[[name]])
+    rep(0, n_draws)
+  }
+  
+  fe_names <- rownames(fixef(model_obj))
+  int_fes  <- fe_names[grepl(":", fe_names)]
+
+  time_names <- c(time_var)
+  if (!is.null(quad_var)) time_names <- c(time_names, quad_var)
+
+
+  X <- tryCatch(
+    stats::model.matrix(brms::brmsterms(formula(model_obj))$dpars$mu$fe, data = data),
+    error = function(e) NULL
+  )
+  covariate_offset <- rep(0, n_draws)
+  if (!is.null(X)) {
+    xbar <- colMeans(X, na.rm = TRUE)
+    # covariates = fixed effects that are NOT the intercept, NOT time terms,
+    # and NOT moderator interaction terms (those are added per-group below).
+    exclude <- c("Intercept", paste0(time_names))
+    for (cn in names(xbar)) {
+      if (cn %in% exclude) next
+      if (grepl(":", cn)) next               # interactions handled per-group
+      bcol <- paste0("b_", cn)
+      if (bcol %in% names(draws_df)) {
+        covariate_offset <- covariate_offset + draws_df[[bcol]] * xbar[[cn]]
+      }
+    }
+  }
+
+  groups  <- list()
+  mod_var <- NULL   
+
+  if (length(int_fes) == 0) {
+    groups[["Overall"]] <- list(
+      logit_first = b_int + covariate_offset + b_time * t_first + b_quad * q_first,
+      logit_last  = b_int + covariate_offset + b_time * t_last  + b_quad * q_last
+    )
+  } else {
+
+    mod_coefs <- unique(unlist(lapply(int_fes, function(fe) {
+      p <- strsplit(fe, ":")[[1]]; p[!p %in% time_names]
+    })))
+
+    data_factors <- names(data)[vapply(data, is.factor, logical(1))]
+    for (mc in mod_coefs) {
+      cand <- data_factors[vapply(data_factors, function(f) startsWith(mc, f), logical(1))]
+      if (length(cand)) { mod_var <- cand[which.max(nchar(cand))]; break }
+    }
+
+    fc <- if (!is.null(mod_var)) fit_contrasts(model_obj, mod_var) else NULL
+
+    if (!is.null(fc)) {
+
+      for (cn in paste0(mod_var, colnames(fc$CM))) {
+        bcol <- paste0("b_", cn)
+        if (!is.null(X) && cn %in% names(xbar) && bcol %in% names(draws_df)) {
+          covariate_offset <- covariate_offset - draws_df[[bcol]] * xbar[[cn]]
+        }
+      }
+      for (L in rownames(fc$CM)) {
+        mod_lin <- rep(0, n_draws); mod_t <- rep(0, n_draws); mod_q <- rep(0, n_draws)
+        for (cc in colnames(fc$CM)) {
+          code <- fc$CM[L, cc]
+          if (code == 0) next                       # reference level: no contribution
+          stub <- paste0(mod_var, cc)
+          mod_lin <- mod_lin + code * safe_draws(paste0("b_", stub))
+          bt <- safe_draws(paste0("b_", time_var, ":", stub))
+          if (all(bt == 0)) bt <- safe_draws(paste0("b_", stub, ":", time_var))
+          mod_t <- mod_t + code * bt
+          if (!is.null(quad_var)) {
+            bq <- safe_draws(paste0("b_", quad_var, ":", stub))
+            if (all(bq == 0)) bq <- safe_draws(paste0("b_", stub, ":", quad_var))
+            mod_q <- mod_q + code * bq
+          }
+        }
+        groups[[L]] <- list(
+          logit_first = b_int + covariate_offset + mod_lin + (b_time + mod_t) * t_first + (b_quad + mod_q) * q_first,
+          logit_last  = b_int + covariate_offset + mod_lin + (b_time + mod_t) * t_last  + (b_quad + mod_q) * q_last
+        )
+      }
+    } else {
+        
+      if (!is.null(X)) {
+        for (mc in mod_coefs) {
+          bcol <- paste0("b_", mc)
+          if (mc %in% names(xbar) && bcol %in% names(draws_df)) {
+            covariate_offset <- covariate_offset - draws_df[[bcol]] * xbar[[mc]]
+          }
+        }
+      }
+      groups[["Reference"]] <- list(
+        logit_first = b_int + covariate_offset + b_time * t_first + b_quad * q_first,
+        logit_last  = b_int + covariate_offset + b_time * t_last  + b_quad * q_last
+      )
+      for (mc in mod_coefs) {
+        b_mod   <- safe_draws(paste0("b_", mc))
+        b_t_int <- safe_draws(paste0("b_", time_var, ":", mc))
+        if (all(b_t_int == 0)) b_t_int <- safe_draws(paste0("b_", mc, ":", time_var))
+        b_q_int <- rep(0, n_draws)
+        if (!is.null(quad_var)) {
+          b_q_int <- safe_draws(paste0("b_", quad_var, ":", mc))
+          if (all(b_q_int == 0)) b_q_int <- safe_draws(paste0("b_", mc, ":", quad_var))
+        }
+        groups[[mc]] <- list(
+          logit_first = b_int + covariate_offset + b_mod + (b_time + b_t_int) * t_first + (b_quad + b_q_int) * q_first,
+          logit_last  = b_int + covariate_offset + b_mod + (b_time + b_t_int) * t_last  + (b_quad + b_q_int) * q_last
+        )
+      }
+    }
+  }
+  
+
+  if (flip) {
+    for (gn in names(groups)) {
+      groups[[gn]]$logit_first <- -groups[[gn]]$logit_first
+      groups[[gn]]$logit_last  <- -groups[[gn]]$logit_last
+    }
+  }
+  
+
+  if (!is.null(mod_var) && mod_var %in% names(data)) {
+    resp <- tryCatch(all.vars(formula(model_obj)$formula[[2]])[1], error = function(e) NA)
+    yv   <- if (!is.na(resp) && resp %in% names(data)) data[[resp]] else NULL
+    if (!is.null(yv) && is.numeric(yv) && all(stats::na.omit(unique(yv)) %in% c(0, 1))) {
+      obs <- tapply(yv, data[[mod_var]], mean, na.rm = TRUE)
+      if (flip) obs <- 1 - obs
+      for (L in names(groups)) {
+        if (!L %in% names(obs) || !is.finite(obs[[L]])) next
+        mid <- mean(c(mean(plogis(groups[[L]]$logit_first)),
+                      mean(plogis(groups[[L]]$logit_last))))
+        if (abs(mid - obs[[L]]) > 0.15) {
+          cat(sprintf("\n> **Coding check — %s:** level `%s` derived rows imply ~%.0f%% but the observed prevalence is ~%.0f%%. Verify this moderator's contrast coding and row labels before using these numbers.\n\n",
+                      model_name, L, 100 * mid, 100 * obs[[L]]))
+        }
+      }
+    }
+  }
+
+  wave_labels <- get_wave_labels(model_name)
+  
+  results <- data.frame(stringsAsFactors = FALSE)
+  
+  for (grp_name in names(groups)) {
+    grp     <- groups[[grp_name]]
+    p_first <- plogis(grp$logit_first)
+    p_last  <- plogis(grp$logit_last)
+    
+    or_draws  <- (p_last / (1 - p_last)) / (p_first / (1 - p_first))
+    rr_draws  <- p_last / p_first
+    ard_draws <- (p_last - p_first) * 100
+    pf_draws  <- p_first * 100
+    pl_draws  <- p_last * 100
+    
+    or_s  <- summarize_posterior(or_draws)
+    rr_s  <- summarize_posterior(rr_draws)
+    ard_s <- summarize_posterior(ard_draws)
+    pf_s  <- summarize_posterior(pf_draws)
+    pl_s  <- summarize_posterior(pl_draws)
+    
+    fmt2 <- function(s) sprintf("%.2f [%.2f, %.2f]", s["est"], s["lo"], s["hi"])
+    fmt2_sign <- function(s) sprintf("%+.2f [%+.2f, %+.2f]", s["est"], s["lo"], s["hi"])
+    
+    row <- data.frame(
+      Group                = grp_name,
+      OR                   = fmt2(or_s),
+      RR                   = fmt2(rr_s),
+      ARD_pp               = fmt2_sign(ard_s),
+      stringsAsFactors     = FALSE
+    )
+    # Dynamic column names for wave labels
+    row[[paste0("Pct_", wave_labels["first"])]] <- fmt2(pf_s)
+    row[[paste0("Pct_", wave_labels["last"])]]  <- fmt2(pl_s)
+    
+    results <- rbind(results, row)
+  }
+  
+  return(results)
+}
+
+
+format_table <- function(df, caption = NULL){
+  df %>%
+    kable(caption = caption, digits = 3) %>%
+    kable_styling(
+      bootstrap_options = c("striped", "hover", "condensed"),
+      full_width = FALSE,
+      position = "left"
+    )
+}
+
+
+format_diagnostics <- function(diagnostics) {
+  if (is.null(diagnostics)) return(NULL)
+  if (!is.null(diagnostics$extraction_error)) {
+    return(data.frame(
+      Diagnostic = "Extraction Error",
+      Value = diagnostics$extraction_error,
+      stringsAsFactors = FALSE
+    ))
+  }
+  
+  diag_df <- data.frame(
+    Diagnostic = c(
+      "Divergent Transitions",
+      "Max Rhat",
+      "N Parameters with Rhat > 1.01",
+      "Min ESS Ratio",
+      "N Parameters with ESS Ratio < 0.1"
+    ),
+    Value = c(
+      as.character(diagnostics$n_divergent %||% "NA"),
+      as.character(round(diagnostics$max_rhat %||% NA, 4)),
+      as.character(diagnostics$n_high_rhat %||% "NA"),
+      as.character(round(diagnostics$min_ess_ratio %||% NA, 4)),
+      as.character(diagnostics$n_low_ess %||% "NA")
+    ),
+    stringsAsFactors = FALSE
+  )
+  
+  return(diag_df)
+}
+
+`%||%` <- function(x, y) if (is.null(x)) y else x
+```
+
+```{r iterate-models, results='asis', fig.keep='all'}
+model_counter <- 0
+
+# Loop through each model
+for(i in seq_along(models_to_report)){
+  model_entry <- models_to_report[[i]]
+  model_name <- model_entry$name
+  model_path <- model_entry$path
+  model_format <- model_entry$format
+  
+  # Create a level 1 header for each model
+  cat(sprintf("\n# %s\n\n", model_name))
+  
+  # Check if file exists
+  if (!file.exists(model_path)) {
+    cat(sprintf("\n**File not found:** `%s`\n\n", model_path))
+    cat("\n---\n\n")
+    next
+  }
+  
+  # Try to load the model
+  tryCatch({
+    results_list <- load_results_list(model_path, model_format)
+    
+    # Check if model fitting was successful
+    if(!isTRUE(results_list$model_success)){
+      cat("**Model fitting was not successful.**\n\n")
+      if(!is.null(results_list$error_message)){
+        cat(sprintf("**Error message:** %s\n\n", results_list$error_message))
+      }
+      if(!is.null(results_list$error_traceback)){
+        cat("```\n")
+        cat(paste(results_list$error_traceback, collapse = "\n"))
+        cat("\n```\n\n")
+      }
+      cat("\n---\n\n")
+      next
+    }
+    
+    # Extract the brmsfit object
+    model_obj <- results_list$brms_fit
+    
+    if(is.null(model_obj) || !inherits(model_obj, "brmsfit")){
+      cat("\n**Error:** Could not extract brmsfit object from results_list.\n\n")
+      cat("\n---\n\n")
+      next
+    }
+    
+    # --- Model Information ---
+    cat("\n## Model Information\n\n")
+    if(!is.null(results_list$model_name)){
+      cat(sprintf("**Model Name:** %s\n\n", results_list$model_name))
+    }
+    cat(sprintf("**File Format:** %s\n\n", toupper(model_format)))
+    if(!is.null(results_list$run_time)){
+      cat(sprintf("**Computation Time:** %.2f hours\n\n", as.numeric(results_list$run_time)))
+    }
+    
+    # --- Model Formula ---
+    cat("\n## Model Formula\n\n")
+    cat("```\n")
+    print(formula(model_obj))
+    cat("```\n\n")
+    
+    model_counter <- model_counter + 1
+    
+
+    flip_outcome <- needs_outcome_flip(model_name)
+    if (flip_outcome) {
+      .resp <- tryCatch(all.vars(formula(model_obj)$formula[[2]])[1],
+                        error = function(e) NA)
+      .lv   <- if (!is.na(.resp) && .resp %in% names(model_obj$data))
+                 levels(model_obj$data[[.resp]]) else NULL
+      if (!is.null(.lv)) flip_outcome <- grepl("good", tolower(.lv[length(.lv)]))
+    }
+    
+
+    rc <- tryCatch(refcoded_fixef_draws(model_obj), error = function(e) NULL)
+
+    cat("\n## Contrast Coding & Reference Groups\n\n")
+    tryCatch({
+      print_coding_info(model_obj, flip = flip_outcome)
+    }, error = function(e) {
+      cat(sprintf("*Could not extract coding info: %s*\n\n", e$message))
+    })
+    
+    # --- Prior Specifications ---
+    cat("\n## Prior Specifications\n\n")
+    
+    priors_df <- NULL
+    if (!is.null(results_list$brms_priors)) {
+      priors_df <- as.data.frame(results_list$brms_priors)
+    } else {
+      priors_df <- tryCatch(
+        as.data.frame(prior_summary(model_obj)),
+        error = function(e) NULL
+      )
+    }
+    
+    if(!is.null(priors_df) && nrow(priors_df) > 0){
+      print(format_table(priors_df, caption = "Prior distributions used in the model"))
+    } else {
+      cat("All priors used default settings.\n")
+    }
+    cat("\n\n")
+    
+    # --- MCMC Diagnostics ---
+    cat("\n## MCMC Diagnostics\n\n")
+    
+    if (!is.null(results_list$diagnostics)) {
+      diag_df <- format_diagnostics(results_list$diagnostics)
+      if (!is.null(diag_df)) {
+        print(format_table(diag_df, caption = "Sampling diagnostics summary"))
+      }
+    } else {
+      cat("No pre-computed diagnostics available. See trace plots and model summary for convergence assessment.\n")
+    }
+    cat("\n\n")
+    
+    # --- Model Summary ---
+    cat("\n## Model Summary\n\n")
+    if (!is.null(rc)) {
+
+      cat(sprintf("These moderation models were not all fit with the same contrast coding: some were fit with reference coding and some with effect (sum-to-zero) coding, which changes what the raw Time, Time^2, group, and group-by-time coefficients represent. So that the raw coefficients are directly comparable across every moderation analysis, models that were fit with effect coding have their Model Summary rebuilt here in reference coding (reference = `%s`); the coefficients are transformed from the model's existing posterior draws, with no refit. Group-level (random) effects are unaffected by this reparameterization.\n\n",
+                  rc$ref_level))
+      print(format_table(refcoded_summary_table(rc$draws),
+                         caption = "Population-Level Effects (reference coding)"))
+      cat("\n\n")
+      sr <- tryCatch(summary(model_obj)$random, error = function(e) NULL)
+      if (!is.null(sr) && length(sr) > 0) {
+        for (g in names(sr)) {
+          rdf <- as.data.frame(sr[[g]])
+          rdf <- cbind(Parameter = rownames(rdf), rdf); rownames(rdf) <- NULL
+          print(format_table(rdf, caption = sprintf("Group-Level Effects: %s", g)))
+          cat("\n\n")
+        }
+      }
+    } else {
+      cat("```\n")
+      print(summary(model_obj), digits = 3)   
+      cat("```\n\n")
+    }
+    
+    # --- Trace Plots ---
+    cat("\n## Trace Plots\n\n")
+    cat("Trace plots show the MCMC chains across iterations. Good mixing appears as a 'hairy caterpillar' pattern.\n\n")
+    
+    pars_to_plot <- variables(model_obj)
+    pars_to_plot <- pars_to_plot[grepl("^b_|^sd_|^cor_", pars_to_plot)]
+    
+    if(length(pars_to_plot) > 0){
+      par_groups <- split(pars_to_plot, ceiling(seq_along(pars_to_plot)/6))
+      
+      for(j in seq_along(par_groups)){
+        p <- mcmc_trace(model_obj, pars = par_groups[[j]])
+        print(p)
+        cat("\n\n")
+      }
+    } else {
+      cat("No parameters to plot.\n\n")
+    }
+    
+    # --- Posterior Predictive Checks ---
+    cat("\n## Posterior Predictive Checks\n\n")
+    cat("Posterior predictive checks compare the observed data (dark line) to simulated data from the model (light lines).\n\n")
+    
+    pp <- pp_check(model_obj, ndraws = 20)
+    print(pp)
+    cat("\n\n")
+    
+    # --- Posterior Probability of Positive Direction ---
+    cat("\n## Posterior Probability of Positive Direction\n\n")
+    cat("This table shows the posterior mean, 95% credible interval, and the probability that each effect is positive (> 0).\n\n")
+
+    prob_dir <- if (!is.null(rc)) refcoded_prob_table(rc$draws, flip = flip_outcome)
+                else calc_posterior_prob_positive(model_obj, flip = flip_outcome)
+    
+    if(nrow(prob_dir) > 0){
+      print(format_table(prob_dir, caption = "Posterior probability of positive direction for each parameter"))
+    } else {
+      cat("No parameters to analyze (only intercept in model).\n")
+    }
+    cat("\n\n")
+    
+    # --- Derived Effect Summary: OR, RR, Point Estimates, ARD ---
+    cat("\n## Derived Effect Summary (First + Last Wave)\n\n")
+    cat("Odds ratio, risk ratio, point estimates (%), and absolute risk difference (pp) comparing the last wave to the first wave. ")
+
+
+    fe_all     <- rownames(fixef(model_obj))
+    time_terms <- c("c_Time", "quad_c_Time")
+    int_terms  <- fe_all[grepl(":", fe_all)]
+    mod_mains  <- unique(unlist(lapply(strsplit(int_terms, ":"),
+                                       function(p) p[!p %in% time_terms])))
+    has_cov    <- length(setdiff(fe_all,
+                        c("Intercept", time_terms, int_terms, mod_mains))) > 0
+    has_ranef  <- tryCatch(!is.null(model_obj$ranef) && nrow(model_obj$ranef) > 0,
+                           error = function(e) FALSE)
+
+    if (has_cov) {
+      cat("Covariates held at their sample means (dummy covariates at their sample proportions), i.e. the average covariate profile. ")
+    }
+    if (has_ranef) {
+      cat("Random effects set to 0, i.e. predictions are for a typical (median) school rather than a value averaged over the school distribution. ")
+    }
+    cat("Intervals are 95% HDI. ")
+    cat("Each quantity (odds ratio, risk ratio, the two percentages, and the absolute risk difference) is summarized from its own posterior draws as a mean and 95% HDI. Because the posterior mean is linear, the absolute risk difference equals the difference of the two reported percentages apart from rounding; the odds ratio and risk ratio, being nonlinear, are not the odds ratio or the ratio of those percentages. Every 95% HDI is computed from that quantity's own draws, so it is not a function of the other columns' intervals.\n\n")
+    
+    tryCatch({
+      effect_tbl <- calc_effect_summary(model_obj, model_name, flip = flip_outcome)
+      if (!is.null(effect_tbl) && nrow(effect_tbl) > 0) {
+        print(format_table(effect_tbl, caption = "Derived contrasts: last wave vs. first wave"))
+      } else {
+        cat("*Could not compute derived contrasts (time variable not detected).*\n\n")
+      }
+    }, error = function(e) {
+      cat(sprintf("*Error computing derived contrasts: %s*\n\n", e$message))
+    })
+    cat("\n\n")
+    
+    # Clean up to free memory
+    rm(results_list, model_obj)
+    gc(verbose = FALSE)
+    
+    cat("\n---\n\n")
+    
+  }, error = function(e){
+    cat(sprintf("\n**Error loading or processing model:** %s\n\n", e$message))
+    cat("\n---\n\n")
+  })
+}
+
+cat(sprintf("\n# Summary\n\n**Total models successfully processed: %d / %d**\n\n",
+            model_counter, length(models_to_report)))
+```
+
+---
+
+**Report generated on:** `r Sys.time()`
+
+# Session Information
+
+Full R session and package versions, for reproducibility (directly addresses
+reviewer reproducibility point [2]: R session info and software versions).
+
+```{r session-info}
+sessionInfo()
+```
+

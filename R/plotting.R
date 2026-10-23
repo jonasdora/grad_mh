@@ -280,9 +280,9 @@ create_percent_summary_plot <- function(fitted_df, group_df, title, y_breaks, y_
         geom_jitter(data=group_df, aes(x = !!sym(xvar), y = perc, size = count), 
                     width = .125, shape = 21, color = clr_palette[9],
                     fill = clr_palette[2], inherit.aes = FALSE) +
-        stat_summary(aes(y=perc, group=1, color="Model Average\nPosterior Predictions"), geom='line', 
+        stat_summary(aes(y=perc, group=1, color="Average Posterior Prediction"), geom='line', 
                      group=1, fun=mean, lwd=2) +
-        scale_color_manual("", values=c("Model Average\nPosterior Predictions" = clr_palette[9])) +
+        scale_color_manual("Bayesian MLM Fit", values=c("Average Posterior Prediction" = clr_palette[9])) +
         scale_x_continuous(breaks = x_breaks, labels = x_labels) +
         scale_y_continuous(breaks = y_breaks, labels = y_labels) +
         coord_cartesian(ylim = y_limits) +

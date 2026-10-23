@@ -1,0 +1,45 @@
+---
+title: "Graduate School MH — NCHA All-Covariate Models"
+author: "Jonas Dora"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: hide
+    theme: flatly
+    highlight: tango
+    df_print: paged
+---
+
+# Overview
+
+NCHA covariate-adjusted models (10).
+
+This is one of five split reports for De Young et al., "Graduate school confers
+risk for mental illness and suicide." The report bodies share a common renderer
+(`_report_body.Rmd`); only the set of models differs between files.
+
+```{r define-models, include=FALSE}
+
+POSTERIOR_OUTPUTS <- "C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/data/OUTPUTS"
+rds_model <- function(label, filename) list(name = label, path = file.path(POSTERIOR_OUTPUTS, paste0(filename, ".rds")), format = "rds")
+rdata_model <- function(label, filename) list(name = label, path = file.path(POSTERIOR_OUTPUTS, paste0(filename, ".RData")), format = "RData")
+
+models_to_report <- list(
+  rds_model("NCHA: Anxious (All Cov)", "anxious_all_covariate"),
+  rds_model("NCHA: Depressed (All Cov)", "depressed_all_covariate"),
+  rds_model("NCHA: Dx Anxiety (All Cov)", "dx_anxiety_all_covariate"),
+  rds_model("NCHA: Dx Depression (All Cov)", "dx_depression_all_covariate"),
+  rds_model("NCHA: Dx NSDUH Any (All Cov)", "dx_nsduh_any_all_covariate"),
+  rds_model("NCHA: Suicide Attempt Linear (All Cov)", "dx_suic_try_all_cov_linear"),
+  rds_model("NCHA: Suicide Attempt Linear+Quadratic (All Cov)", "suic_try_full_covariate"),
+  rds_model("NCHA: Global Health (All Cov)", "global_health_full_covariate"),
+  rds_model("NCHA: Suicidal Thinking (All Cov)", "suic_thnk_full_covariate"),
+  rds_model("NCHA: Any psychiatric distress (All Cov)", "neg_emo_any_all_cov")
+)
+```
+
+```{r child = "_report_body.Rmd"}
+```
