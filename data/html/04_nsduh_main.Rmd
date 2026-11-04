@@ -26,7 +26,7 @@ risk for mental illness and suicide." The report bodies share a common renderer
 # This chunk runs before the shared body is included, so it defines the output
 # path and the two entry-builder helpers itself. The shared body (_report_body.Rmd)
 # consumes `models_to_report` and renders each model.
-POSTERIOR_OUTPUTS <- "C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/data/OUTPUTS"
+POSTERIOR_OUTPUTS <- file.path(here::here(), "data", "OUTPUTS")
 rds_model <- function(label, filename) list(name = label, path = file.path(POSTERIOR_OUTPUTS, paste0(filename, ".rds")), format = "rds")
 rdata_model <- function(label, filename) list(name = label, path = file.path(POSTERIOR_OUTPUTS, paste0(filename, ".RData")), format = "RData")
 

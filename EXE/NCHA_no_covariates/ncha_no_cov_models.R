@@ -1,8 +1,6 @@
 
 
-BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/project_config.R'
-if (!file.exists(BASE_FILE)) stop(sprintf("Missing project config: %s", BASE_FILE))
-source(BASE_FILE)   # -> DATA_DIR, R_DIR, POSTERIOR_OUTPUTS
+source(here::here("project_config.R"))
 
 library(tidyverse)
 library(glue)
@@ -61,8 +59,6 @@ MODELS <- list(
     list(save_name = "dx_schizo_no_cov",          y_var = "Q31B_schizo_dich",       quadratic = TRUE,  published = FALSE)   # "Schizophrenia"
 )
 
-MODELS <- Filter(function(m) m$save_name == "neg_emo_any_no_cov", MODELS)
-SKIP_EXISTING <- FALSE
 
 stopifnot(ID_VAR %in% names(grads_model_base))
 stopifnot(all(c("c_Time", "quad_c_Time") %in% names(grads_model_base)))

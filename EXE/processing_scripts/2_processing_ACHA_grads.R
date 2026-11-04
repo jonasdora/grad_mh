@@ -6,9 +6,9 @@ DATA_VERSION <- "2023-04-15"
 library(glue)
 library(tidyverse)
 library(haven)
-source('~/grad_mh/project_config.R')
+source(here::here("project_config.R"))
 sapply(list.files(R_DIR, full.names = TRUE), source)
-load('{DATA_DIR}/ACHA-II/acha_study_data_{DATA_VERSION}.RData' %>% glue())
+load('{DATA_DIR}/acha_study_data_{DATA_VERSION}.RData' %>% glue())
 
 grads_model_base <- grads_only_study_df %>% 
     filter(us_region != "Outside U.S.") %>% 
@@ -44,11 +44,11 @@ grads_model_base[["quad_c_Time"]] <- grads_model_base[["c_Time"]]^2
 grads_model_base[["c_Q46_age"]] <- grads_model_base[["Q46_age"]] - mean(grads_model_base[["Q46_age"]], na.rm = TRUE)
 
 write.csv(grads_model_base,
-          "{DATA_DIR}/ACHA-II/grad_students_study_base_{DATA_VERSION}_v2.csv" %>% glue(), 
+          "{DATA_DIR}/grad_students_study_base_{DATA_VERSION}_v2.csv" %>% glue(), 
           row.names = FALSE)
 
 write_sav(grads_model_base,
-          "{DATA_DIR}/ACHA-II/grad_students_study_base_{DATA_VERSION}_v2.sav" %>% glue())
+          "{DATA_DIR}/grad_students_study_base_{DATA_VERSION}_v2.sav" %>% glue())
 
 save(list = c("grads_model_base", "DATA_VERSION"), 
-     file = "{DATA_DIR}/ACHA-II/acha_grad_students_base_{DATA_VERSION}.RData" %>% glue())
+     file = "{DATA_DIR}/acha_grad_students_base_{DATA_VERSION}.RData" %>% glue())

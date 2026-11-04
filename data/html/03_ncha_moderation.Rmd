@@ -23,7 +23,7 @@ risk for mental illness and suicide." The report bodies share a common renderer
 
 ```{r define-models, include=FALSE}
 
-POSTERIOR_OUTPUTS <- "C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/data/OUTPUTS"
+POSTERIOR_OUTPUTS <- file.path(here::here(), "data", "OUTPUTS")
 rds_model <- function(label, filename) list(name = label, path = file.path(POSTERIOR_OUTPUTS, paste0(filename, ".rds")), format = "rds")
 rdata_model <- function(label, filename) list(name = label, path = file.path(POSTERIOR_OUTPUTS, paste0(filename, ".RData")), format = "RData")
 

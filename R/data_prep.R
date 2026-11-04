@@ -92,6 +92,14 @@ load_ncha_data <- function() {
                 # Note the ordering is intentional - want focal condition to be poor health
                 good = c('Good', 'Very good', 'Excellent'),
                 poor = c('Poor', 'Fair')
+                
+            ),
+            # Race moderator: White = NonHisp White only; every other race_ethn
+            # group (Hispanic included) = Non-White; White = reference. 
+            race = factor(
+                ifelse(is.na(race_ethn), NA_character_,
+                       ifelse(race_ethn == "NonHisp White", "White", "Non-White")),
+                levels = c("White", "Non-White")
             )
         )
 }

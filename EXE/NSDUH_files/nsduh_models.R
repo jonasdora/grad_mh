@@ -1,7 +1,5 @@
 
-BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/project_config.R'
-if (!file.exists(BASE_FILE)) stop(sprintf("Missing project config: %s", BASE_FILE))
-source(BASE_FILE)
+source(here::here("project_config.R"))
 
 library(tidyverse)
 library(glue)

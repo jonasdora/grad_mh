@@ -1,7 +1,5 @@
 
-BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/project_config.R'
-if (!file.exists(BASE_FILE)) stop(sprintf("Missing project config: %s", BASE_FILE))
-source(BASE_FILE)
+source(here::here("project_config.R"))
 
 library(tidyverse)
 library(glue)
@@ -65,8 +63,6 @@ MODELS <- list(
          y_var = "neg_emo_any",            quadratic = TRUE,  verified = FALSE)
 )
 
-MODELS <- Filter(function(m) m$save_name == "neg_emo_any_all_cov", MODELS)
-SKIP_EXISTING <- FALSE
 
 stopifnot(ID_VAR %in% names(grads_model_base))
 stopifnot(all(LV2_INT_VARS %in% names(grads_model_base)))

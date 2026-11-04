@@ -22,7 +22,7 @@ if(!require(cmdstanr)){
 library(glue)
 library(magrittr)
 
-LOCAL_REPO <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh'
+LOCAL_REPO <- here::here()
 DATA_DIR <- paste0(LOCAL_REPO, '/', 'data')
 R_DIR <- paste0(LOCAL_REPO, '/', 'R')
 MAPS_DIR <- paste0(LOCAL_REPO, '/', 'data_maps')

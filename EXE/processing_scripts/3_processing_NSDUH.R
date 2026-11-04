@@ -1,18 +1,13 @@
 # File used to produce model-script ready NSDUH data
-BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/shackman/grad_mh/project_config.R'
 DATA_VERSION <- '2023-01-15'
 
 # If missing the config file raise early.
 # Likely just opened the repo in a different file system
-if(!file.exists(BASE_FILE)){
-    stop('ERROR: Missing project config file. {BASE_FILE}' %>% glue())
-}
-
-source(BASE_FILE)
+source(here::here("project_config.R"))
 sapply(list.files(R_DIR, full.names = TRUE), source)
 
 # Load the NSDUH data:
-load_RData_files('C:/Users/Jonas Dora/OneDrive - UW/studies/shackman/grad_mh/data/NSDUH/raw_data')
+load_RData_files(here::here("data", "NSDUH", "raw_data"))
 
 # Process and concatenate original and study_dfs
 NSDUH_2008_df_list <- create_study_datasets(PUF2008_090718, '{MAPS_DIR}/NSDUH_map_2008.yaml' %>% glue())
@@ -137,10 +132,10 @@ nsduh_study_df[['age_buckets']] <- case_when(
 )
 
 save(list = c('nsduh_study_df', nsduh_dfs), 
-     file = '{DATA_DIR}/NSDUH/nsduh_study_data_{DATA_VERSION}.RData' %>% glue())
+     file = '{DATA_DIR}/nsduh_study_data_{DATA_VERSION}.RData' %>% glue())
 
 nsduh_matched_df <- nsduh_study_df %>% 
     filter(college_adult_mask == 1)
 
 save(list = c('nsduh_matched_df'), 
-     file = '{DATA_DIR}/NSDUH/nsduh_matched_data_{DATA_VERSION}.RData' %>% glue())
+     file = '{DATA_DIR}/nsduh_matched_data_{DATA_VERSION}.RData' %>% glue())

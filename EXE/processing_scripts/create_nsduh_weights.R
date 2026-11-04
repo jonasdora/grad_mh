@@ -1,8 +1,7 @@
 library(tidyverse)
 library(glue)
-source('C:/Users/Jonas Dora/OneDrive - UW/studies/shackman/grad_mh/project_config.R')
-
-load('{DATA_DIR}/NSDUH/nsduh_study_data_2023-01-15.RData' %>% glue())
+source(here::here("project_config.R"))
+load('{DATA_DIR}/nsduh_study_data_2023-01-15.RData' %>% glue())
 load('{DATA_DIR}/acha_study_data_2021-02-04.RData' %>% glue())
 
 # Will create weights using the probability of being in the ACHA-II sample each year
@@ -139,4 +138,4 @@ nsduh_weighted_summary_df <- nsduh_matched_df %>%
     select(c_Time, anymi_12mos, suic_thnk_12mos, suic_try_12mos, global_health_dich)
 
 save(list=c('nsduh_matched_df', 'nsduh_weighted_summary_df'), 
-     file='{DATA_DIR}/NSDUH/nsduh_matched_study_data_{Sys.Date()}.RData' %>% glue())
+     file='{DATA_DIR}/nsduh_matched_study_data_{Sys.Date()}.RData' %>% glue())

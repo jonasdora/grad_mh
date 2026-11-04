@@ -5,13 +5,7 @@ library(tidyverse)
 library(glue)
 library(GGally)
 
-BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/project_config.R'
-
-if(!file.exists(BASE_FILE)){
-    stop('ERROR: Missing project config file. {BASE_FILE}' %>% glue())
-}
-
-source(BASE_FILE)
+source(here::here("project_config.R"))
 
 
 source(file.path(R_DIR, "modeling_mod.R"))

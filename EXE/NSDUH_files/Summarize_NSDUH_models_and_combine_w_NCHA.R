@@ -5,15 +5,10 @@ library(tidyverse)
 library(glue)
 library(Cairo)
 
-BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/project_config.R'
 DATA_VERSION <- "2023-01-15"
 VERSION <- format(Sys.Date(), "v%Y%m%d")
 
-if(!file.exists(BASE_FILE)){
-    stop('ERROR: Missing project config file. {BASE_FILE}' %>% glue())
-}
-
-source(BASE_FILE)
+source(here::here("project_config.R"))
 source(file.path(R_DIR, "modeling_mod.R"))
 source(file.path(R_DIR, "plotting.R"))
 source(file.path(R_DIR, "utils.R"))      

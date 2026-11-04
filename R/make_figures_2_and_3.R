@@ -49,9 +49,7 @@ font_theme <- if (nzchar(PLOT_FONT)) {
   theme(plot.margin = margin(4, 4, 4, 4))
 }
 
-BASE_FILE <- 'C:/Users/Jonas Dora/OneDrive - UW/studies/2026_shackman/grad_mh/project_config.R'
-if(!file.exists(BASE_FILE)) stop(glue('Missing project config: {BASE_FILE}'))
-source(BASE_FILE)
+source(here::here("project_config.R"))
 source(file.path(R_DIR, "modeling_mod.R"))   
 source(file.path(R_DIR, "plotting.R"))      
 source(file.path(R_DIR, "utils.R"))
