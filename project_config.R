@@ -1,6 +1,6 @@
 
 pkgs <- c('rstan', 'shinystan', 'brms', 'ggraph', 'GGally', 'tufte', 'nFactors', 'tidygraph', 'lavaan', 
-          'Cairo')
+          'Cairo', 'here')
 
 for(pkg in pkgs){
     if(!require(pkg, character.only=TRUE)){
